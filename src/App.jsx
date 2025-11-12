@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, deleteDoc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase/config";
 import { useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
@@ -9,19 +9,20 @@ function App() {
   const [age, setAge] = useState("");
   const [modal, setModal] = useState(false);
 
-  const getUsers = async () => {
-    try {
-      const usersData = await getDocs(collection(db, "users"));
+  useEffect(() => {
+    const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+
+    // onSnapshot bilan real-time data olish
+    const unsub = onSnapshot(q, (usersData) => {
       const users = usersData.docs.map((user) => ({
         id: user.id,
         ...user.data(),
       }));
       setData(users);
-    } catch (error) {
-      toast.error("Error fetching users");
-      console.error(error);
-    }
-  };
+    });
+    
+    return () => unsub();
+  }, []);
 
   const submit = async () => {
     if (!name || !age) {
@@ -33,9 +34,9 @@ function App() {
       const docRef = await addDoc(collection(db, "users"), {
         name,
         age: Number(age),
+        createdAt: serverTimestamp(),
       });
       toast.success("User added successfully!");
-      setData((prev) => [{ id: docRef.id, name, age: Number(age) }, ...prev]);
       setModal(false);
       setName("");
       setAge("");
@@ -45,16 +46,19 @@ function App() {
     }
   };
 
-
-  useEffect(() => {
-    getUsers();
-  }, []);
+  const deleteUser = async (id) => {
+    try {
+      await deleteDoc(doc(db, "users", id));
+      toast.success("User deleted!");
+    } catch (error) {
+      toast.error("Delete failed!");
+      console.error(error);
+    }
+  };
 
   return (
     <div>
-      <Toaster position="top-right" />
-
-      {/* 🔹 Modal */}
+      <Toaster position="top-center" />
       {modal && (
         <form
           onSubmit={(e) => {
@@ -143,11 +147,17 @@ function App() {
         {data &&
           data.map(({ id, name, age }) => (
             <div
-              className="w-[300px] h-[150px] flex items-center justify-center gap-2 flex-col bg-gray-400 text-white rounded-2xl shadow-lg"
+              className="w-[300px] h-[250px] flex items-center justify-around py-5 gap-2 flex-col bg-gray-400 text-white rounded-2xl shadow-lg"
               key={id}
             >
-              <h1 className="text-3xl font-bold">{name}</h1>
-              <p className="text-lg font-semibold">Age: {age}</p>
+              <h1 className="text-2xl font-bold text-center">{name}</h1>
+              <p className="text-md font-semibold">Age: {age}</p>
+              <button
+                onClick={() => deleteUser(id)}
+                className="py-5 w-30 rounded-2xl bg-red-600 hover:bg-red-700"
+              >
+                <i className="fa-solid fa-trash"></i>
+              </button>
             </div>
           ))}
       </div>
